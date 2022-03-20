@@ -7,14 +7,16 @@ import {
   Image,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
 } from "react-native";
 import { AntDesign, EvilIcons } from "@expo/vector-icons";
 
 import axios from "axios";
-import { formatDistanceToNowStrict } from "date-fns";
 
 const HomeScreen = ({ navigation }) => {
   const [data, setData] = useState([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
 
   useEffect(() => {
     getAllTweets();
@@ -25,10 +27,19 @@ const HomeScreen = ({ navigation }) => {
       .get("https://ba7a-88-203-206-207.ngrok.io/api/tweets")
       .then((response) => {
         setData(response.data);
+        setIsLoading(false);
+        setIsRefreshing(false);
       })
       .catch((error) => {
         console.log(error);
+        setIsLoading(false);
+        setIsRefreshing(false);
       });
+  };
+
+  const handleRefresh = () => {
+    setIsRefreshing(true);
+    getAllTweets();
   };
 
   const goToProfile = () => {
@@ -68,7 +79,7 @@ const HomeScreen = ({ navigation }) => {
           </Text>
           <Text>&middot;</Text>
           <Text numberOfLines={1} style={styles.tweetHandle}>
-            {formatDistanceToNowStrict(new Date(tweet.created_at))}
+            {tweet.created_at}
           </Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -123,14 +134,21 @@ const HomeScreen = ({ navigation }) => {
 
   return (
     <View style={styles.screen}>
-      <FlatList
-        data={data}
-        renderItem={renderItem}
-        keyExtractor={(item) => item.id}
-        ItemSeparatorComponent={() => (
-          <View style={styles.tweetSeparator}></View>
-        )}
-      />
+      {isLoading ? (
+        <ActivityIndicator style={{ marginTop: 8 }} size="large" color="gray" />
+      ) : (
+        <FlatList
+          data={data}
+          renderItem={renderItem}
+          keyExtractor={(item) => item.id.toString()}
+          ItemSeparatorComponent={() => (
+            <View style={styles.tweetSeparator}></View>
+          )}
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+        />
+      )}
+
       <TouchableOpacity
         style={styles.floatingButton}
         onPress={() => goToNewTweet()}
