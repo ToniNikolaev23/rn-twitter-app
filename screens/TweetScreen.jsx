@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState, useRef, useContext } from "react";
 import {
   View,
   Text,
@@ -6,71 +6,169 @@ import {
   Image,
   TouchableOpacity,
   Platform,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
-import { Entypo, EvilIcons } from "@expo/vector-icons";
+import { Entypo, EvilIcons, AntDesign } from "@expo/vector-icons";
+import axiosConfig from "../helpers/axiosConfig";
+import { format } from "date-fns";
+import { Modalize } from "react-native-modalize";
+import { AuthContext } from "../context/AuthProvider";
 
-const TweetScreen = ({ navigation }) => {
-  const goToProfile = () => {
-    navigation.navigate("Profile Screen");
+const TweetScreen = ({ route, navigation }) => {
+  const { user } = useContext(AuthContext);
+  const [tweet, setTweet] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const modalizeRef = useRef(null);
+  useEffect(() => {
+    getTweet();
+  }, []);
+
+  const getTweet = () => {
+    axiosConfig
+      .get(`/tweets/${route.params.tweetId}`)
+      .then((response) => {
+        setTweet(response.data);
+
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        setIsLoading(false);
+      });
+  };
+
+  const deleteTweet = () => {
+    axiosConfig.defaults.headers.common[
+      "Authorization"
+    ] = `Bearer ${user.token}`;
+    axiosConfig
+      .delete(`/tweets/${route.params.tweetId}`)
+      .then((response) => {
+        navigation.navigate("Home1", {
+          tweetDeleted: true,
+        });
+        Alert.alert("Tweet was deleted.");
+      })
+      .catch((error) => {
+        console.log(error.response);
+      });
+  };
+
+  const showAlert = () => {
+    Alert.alert("Delete this tweet?", null, [
+      {
+        text: "Cancel",
+        onPress: () => modalizeRef.current?.close(),
+        style: "cancel",
+      },
+      {
+        text: "OK",
+        onPress: () => deleteTweet(),
+        style: "default",
+      },
+    ]);
+  };
+
+  const goToProfile = (userId) => {
+    navigation.navigate("Profile Screen", {
+      userId: userId,
+    });
   };
   return (
     <View style={styles.container}>
-      <View style={styles.profileContainer}>
-        <TouchableOpacity style={styles.flexRow} onPress={() => goToProfile()}>
-          <Image
-            style={styles.avatar}
-            source={{ uri: "https://reactnative.dev/img/tiny_logo.png" }}
-          />
-          <View>
-            <Text style={styles.tweetName}>Toni Stoyanov</Text>
-            <Text style={styles.tweetHandle}>@toni</Text>
+      {isLoading ? (
+        <ActivityIndicator style={{ marginTop: 8 }} size="large" color="gray" />
+      ) : (
+        <>
+          <View style={styles.profileContainer}>
+            <TouchableOpacity
+              style={styles.flexRow}
+              onPress={() => goToProfile(tweet.user.id)}
+            >
+              <Image
+                style={styles.avatar}
+                source={{ uri: tweet.user.avatar }}
+              />
+              <View>
+                <Text style={styles.tweetName}>{tweet.user.name}</Text>
+                <Text style={styles.tweetHandle}>@{tweet.user.username}</Text>
+              </View>
+            </TouchableOpacity>
+            {user.id === tweet.user.id && (
+              <TouchableOpacity onPress={() => modalizeRef.current?.open()}>
+                <Entypo name="dots-three-vertical" size={24} color="gray" />
+              </TouchableOpacity>
+            )}
           </View>
-        </TouchableOpacity>
-        <TouchableOpacity>
-          <Entypo name="dots-three-vertical" size={24} color="gray" />
-        </TouchableOpacity>
-      </View>
-      <View style={styles.tweetContentContainer}>
-        <Text style={styles.tweetContent}>
-          Lorem ipsum dolor sit amet consectetur adipisicing elit. Nisi
-          obcaecati earum culpa veritatis accusantium nesciunt sit iure et ab,
-          odit ratione quasi at nobis eligendi rerum, neque architecto minus?
-          Quisquam!
-        </Text>
-      </View>
-      <View style={styles.tweetEngagement}>
-        <View style={styles.flexRow}>
-          <Text style={styles.tweetEngagementNumber}>655</Text>
-          <Text style={styles.tweetEngagementLabel}>Retweets</Text>
-        </View>
-        <View style={[styles.flexRow, styles.ml4]}>
-          <Text style={styles.tweetEngagementNumber}>38</Text>
-          <Text style={styles.tweetEngagementLabel}>Quote Tweets</Text>
-        </View>
-        <View style={[styles.flexRow, styles.ml4]}>
-          <Text style={styles.tweetEngagementNumber}>2834</Text>
-          <Text style={styles.tweetEngagementLabel}>Likes</Text>
-        </View>
-      </View>
+          <View style={styles.tweetContentContainer}>
+            <Text style={styles.tweetContent}>{tweet.body}</Text>
+          </View>
+          <View style={styles.tweetTimestampContainer}>
+            <Text style={styles.tweetTimestampText}>
+              {format(new Date(tweet.created_at), "h:mm a")}
+            </Text>
+            <Text style={styles.tweetTimestampText}>&middot;</Text>
+            <Text style={styles.tweetTimestampText}>
+              {format(new Date(tweet.created_at), "d MMM.yy")}
+            </Text>
+            <Text style={styles.tweetTimestampText}>&middot;</Text>
+            <Text style={[styles.tweetTimestampText, styles.linkColor]}>
+              Twitter for iPhone
+            </Text>
+          </View>
+          <View style={styles.tweetEngagement}>
+            <View style={styles.flexRow}>
+              <Text style={styles.tweetEngagementNumber}>655</Text>
+              <Text style={styles.tweetEngagementLabel}>Retweets</Text>
+            </View>
+            <View style={[styles.flexRow, styles.ml4]}>
+              <Text style={styles.tweetEngagementNumber}>38</Text>
+              <Text style={styles.tweetEngagementLabel}>Quote Tweets</Text>
+            </View>
+            <View style={[styles.flexRow, styles.ml4]}>
+              <Text style={styles.tweetEngagementNumber}>2834</Text>
+              <Text style={styles.tweetEngagementLabel}>Likes</Text>
+            </View>
+          </View>
 
-      <View style={[styles.tweetEngagement, styles.spaceAround]}>
-        <TouchableOpacity>
-          <EvilIcons name="comment" size={32} color="gray" />
-        </TouchableOpacity>
-        <TouchableOpacity>
-          <EvilIcons name="retweet" size={32} color="gray" />
-        </TouchableOpacity>
-        <TouchableOpacity>
-          <EvilIcons name="heart" size={32} color="gray" />
-        </TouchableOpacity>
-        <TouchableOpacity>
-          <EvilIcons
-            name={Platform.OS === "android" ? "share-google" : "share-apple"}
-            size={32}
-            color="gray"
-          />
-        </TouchableOpacity>
-      </View>
+          <View style={[styles.tweetEngagement, styles.spaceAround]}>
+            <TouchableOpacity>
+              <EvilIcons name="comment" size={32} color="gray" />
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <EvilIcons name="retweet" size={32} color="gray" />
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <EvilIcons name="heart" size={32} color="gray" />
+            </TouchableOpacity>
+            <TouchableOpacity>
+              <EvilIcons
+                name={
+                  Platform.OS === "android" ? "share-google" : "share-apple"
+                }
+                size={32}
+                color="gray"
+              />
+            </TouchableOpacity>
+          </View>
+          <Modalize ref={modalizeRef} snapPoint={200}>
+            <View style={{ paddingHorizontal: 24, paddingVertical: 32 }}>
+              <TouchableOpacity style={styles.menuButton}>
+                <AntDesign name="pushpino" size={24} color="#222" />
+                <Text style={styles.menuButtonText}>Pin tweet</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.menuButton, styles.mt6]}
+                onPress={showAlert}
+              >
+                <AntDesign name="delete" size={24} color="#222" />
+                <Text style={styles.menuButtonText}>Delete tweet</Text>
+              </TouchableOpacity>
+            </View>
+          </Modalize>
+        </>
+      )}
     </View>
   );
 };
@@ -133,6 +231,30 @@ const styles = StyleSheet.create({
   },
   spaceAround: {
     justifyContent: "space-around",
+  },
+  tweetTimestampContainer: {
+    flexDirection: "row",
+    marginTop: 12,
+    justifyContent: "space-around",
+  },
+  tweetTimestampText: {
+    color: "gray",
+    marginRight: 6,
+  },
+  linkColor: {
+    color: "#1d9bf1",
+  },
+  menuButton: {
+    flexDirection: "row",
+    alignItems: "center",
+  },
+  menuButtonText: {
+    fontSize: 20,
+    color: "#222",
+    marginLeft: 12,
+  },
+  mt6: {
+    marginTop: 32,
   },
 });
 

@@ -1,5 +1,6 @@
 import { EvilIcons } from "@expo/vector-icons";
-import React from "react";
+import { format } from "date-fns";
+import React, { useEffect, useState, useContext } from "react";
 import {
   View,
   Text,
@@ -8,127 +9,236 @@ import {
   TouchableOpacity,
   Linking,
   FlatList,
+  ActivityIndicator,
+  Alert,
 } from "react-native";
+import RenderItem from "../components/RenderItem";
 
-const Profile = () => {
-  const DATA = [
-    {
-      id: "1",
-      title: "First Item",
-    },
-    {
-      id: "2",
-      title: "Second Item",
-    },
-    {
-      id: "3",
-      title: "Third Item",
-    },
-    {
-      id: "4",
-      title: "Fourth Item",
-    },
-    {
-      id: "5",
-      title: "Fifth Item",
-    },
-    {
-      id: "6",
-      title: "Sixth Item",
-    },
-    {
-      id: "7",
-      title: "Seven Item",
-    },
-    {
-      id: "8",
-      title: "Eight Item",
-    },
-    {
-      id: "9",
-      title: "Nine Item",
-    },
-    {
-      id: "10",
-      title: "Ten Item",
-    },
-  ];
+import axiosConfig from "../helpers/axiosConfig";
+import { AuthContext } from "../context/AuthProvider";
 
-  const renderItem = ({ item }) => (
-    <View style={{ marginVertical: 20 }}>
-      <Text>{item.title}</Text>
-    </View>
-  );
+const Profile = ({ route, navigation }) => {
+  const [user, setUser] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  const [data, setData] = useState([]);
+  const [isLoadingTweets, setIsLoadingTweets] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [page, setPage] = useState(1);
+  const [isAtEndOfScrolling, setIsAtEndOfScrolling] = useState(false);
+  const [isFollowing, setIsFollowing] = useState(false);
+
+  const { user: ctxUser } = useContext(AuthContext);
+
+  useEffect(() => {
+    getUserProfile();
+    getUserTweets();
+  }, [page]);
+
+  useEffect(() => {
+    getUserProfile();
+    getIsFollowing();
+  }, []);
+
+  const getIsFollowing = () => {
+    axiosConfig.defaults.headers.common[
+      "Authorization"
+    ] = `Bearer ${ctxUser.token}`;
+
+    axiosConfig
+      .get(`/is_following/${route.params.userId}`)
+      .then((response) => {
+        setIsFollowing(response.data);
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        console.log(error.response);
+      });
+  };
+
+  const followUser = (userId) => {
+    axiosConfig.defaults.headers.common[
+      "Authorization"
+    ] = `Bearer ${ctxUser.token}`;
+
+    axiosConfig
+      .post(`/follow/${route.params.userId}`)
+      .then((response) => {
+        setIsFollowing(true);
+        Alert.alert("You are now following this user!");
+      })
+      .catch((error) => {
+        console.log(error.response);
+      });
+  };
+
+  const unfollowUser = (userId) => {
+    axiosConfig.defaults.headers.common[
+      "Authorization"
+    ] = `Bearer ${ctxUser.token}`;
+
+    axiosConfig
+      .post(`/unfollow/${route.params.userId}`)
+      .then((response) => {
+        setIsFollowing(false);
+        Alert.alert("You are now unfollowing this user!");
+      })
+      .catch((error) => {
+        console.log(error.response);
+      });
+  };
+
+  const getUserProfile = () => {
+    axiosConfig
+      .get(`/users/${route.params.userId}`)
+      .then((response) => {
+        setUser(response.data);
+
+        setIsLoading(false);
+      })
+      .catch((error) => {
+        console.log(error);
+        setIsLoading(false);
+        setIsRefreshing(false);
+      });
+  };
+
+  const getUserTweets = () => {
+    axiosConfig
+      .get(`/users/${route.params.userId}/tweets?page=${page}`)
+      .then((response) => {
+        // setData(response.data.data);
+        if (page === 1) {
+          setData(response.data.data);
+        } else {
+          setData([...data, ...response.data.data]);
+        }
+
+        if (!response.data.next_page_url) {
+          setIsAtEndOfScrolling(true);
+        }
+        setIsLoadingTweets(false);
+        setIsRefreshing(false);
+      })
+      .catch((error) => {
+        console.log(error);
+        setIsLoadingTweets(false);
+        setIsRefreshing(false);
+      });
+  };
+
+  const handleRefresh = () => {
+    setPage(1);
+    setIsAtEndOfScrolling(false);
+    setIsRefreshing(true);
+    getUserTweets();
+  };
+
+  const handleEnd = () => {
+    setPage(page + 1);
+  };
 
   const ProfileHeader = () => (
     <View style={styles.container}>
-      <Image
-        style={styles.backgroundImage}
-        source={{
-          uri: "https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1080&q=80",
-        }}
-      />
-      <View style={styles.avatarContainer}>
-        <Image
-          style={styles.avatar}
-          source={{ uri: "https://reactnative.dev/img/tiny_logo.png" }}
-        />
-        <TouchableOpacity style={styles.followButton}>
-          <Text style={styles.followButtonText}>Follow</Text>
-        </TouchableOpacity>
-      </View>
-      <View style={styles.nameContainer}>
-        <Text style={styles.profileName}>Toni Stoyanov</Text>
-        <Text style={styles.profileHandle}>@toni</Text>
-      </View>
-      <View style={styles.profileContainer}>
-        <Text style={styles.profileContainerText}>
-          CEO of CEOs, PhD, MSc, SEO, HTML, CSS, JS Evangelist Pro Expert S Rank
-          Elite Best of the best.
-        </Text>
-      </View>
-      <View style={styles.locationContainer}>
-        <EvilIcons name="location" size={24} color="gray" />
-        <Text style={styles.textGray}>Stara Zagora, Bulgaria</Text>
-      </View>
+      {isLoading ? (
+        <ActivityIndicator style={{ marginTop: 8 }} size="large" color="gray" />
+      ) : (
+        <>
+          <Image
+            style={styles.backgroundImage}
+            source={{
+              uri: "https://images.unsplash.com/photo-1557683316-973673baf926?ixlib=rb-1.2.1&ixid=MnwxMjA3fDB8MHxwaG90by1wYWdlfHx8fGVufDB8fHx8&auto=format&fit=crop&w=1080&q=80",
+            }}
+          />
+          <View style={styles.avatarContainer}>
+            <Image style={styles.avatar} source={{ uri: user.avatar }} />
+            {ctxUser.id !== route.params.userId && (
+              <View>
+                {isFollowing ? (
+                  <TouchableOpacity
+                    style={styles.followButton}
+                    onPress={() => unfollowUser(route.params.userId)}
+                  >
+                    <Text style={styles.followButtonText}>Unfollow</Text>
+                  </TouchableOpacity>
+                ) : (
+                  <TouchableOpacity
+                    style={styles.followButton}
+                    onPress={() => followUser(route.params.userId)}
+                  >
+                    <Text style={styles.followButtonText}>Follow</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
+            )}
+          </View>
+          <View style={styles.nameContainer}>
+            <Text style={styles.profileName}>{user.name}</Text>
+            <Text style={styles.profileHandle}>@{user.username}</Text>
+          </View>
+          <View style={styles.profileContainer}>
+            <Text style={styles.profileContainerText}>{user.profile}</Text>
+          </View>
+          <View style={styles.locationContainer}>
+            <EvilIcons name="location" size={24} color="gray" />
+            <Text style={styles.textGray}>{user.location}</Text>
+          </View>
 
-      <View style={styles.linkContainer}>
-        <TouchableOpacity
-          style={styles.linkItem}
-          onPress={() => Linking.openURL("https://laracasts.com")}
-        >
-          <EvilIcons name="link" size={24} color="gray" />
-          <Text style={styles.linkColor}>laracasts.com</Text>
-        </TouchableOpacity>
-        <View style={[styles.linkItem, styles.ml4]}>
-          <EvilIcons name="calendar" size={24} color="gray" />
-          <Text style={styles.textGray}>Joined September 1992</Text>
-        </View>
-      </View>
+          <View style={styles.linkContainer}>
+            <TouchableOpacity
+              style={styles.linkItem}
+              onPress={() => Linking.openURL(user.link)}
+            >
+              <EvilIcons name="link" size={24} color="gray" />
+              <Text style={styles.linkColor}>{user.linkText}</Text>
+            </TouchableOpacity>
+            <View style={[styles.linkItem, styles.ml4]}>
+              <EvilIcons name="calendar" size={24} color="gray" />
+              <Text style={styles.textGray}>
+                Joined {format(new Date(user.created_at), "MMM yyyy")}
+              </Text>
+            </View>
+          </View>
 
-      <View style={styles.followContainer}>
-        <View style={styles.followItem}>
-          <Text style={styles.followItemNumber}>509</Text>
-          <Text style={styles.followItemLabel}>Following</Text>
-        </View>
-        <View style={[styles.followItem, styles.ml4]}>
-          <Text style={styles.followItemNumber}>2,354</Text>
-          <Text style={styles.followItemLabel}>Followers</Text>
-        </View>
-      </View>
+          <View style={styles.followContainer}>
+            <View style={styles.followItem}>
+              <Text style={styles.followItemNumber}>509</Text>
+              <Text style={styles.followItemLabel}>Following</Text>
+            </View>
+            <View style={[styles.followItem, styles.ml4]}>
+              <Text style={styles.followItemNumber}>2,354</Text>
+              <Text style={styles.followItemLabel}>Followers</Text>
+            </View>
+          </View>
 
-      <View style={styles.separator}></View>
+          <View style={styles.separator}></View>
+        </>
+      )}
     </View>
   );
   return (
-    <FlatList
-      data={DATA}
-      style={styles.container}
-      renderItem={renderItem}
-      keyExtractor={(item) => item.id}
-      ItemSeparatorComponent={() => <View style={styles.separator}></View>}
-      ListHeaderComponent={ProfileHeader}
-    />
+    <View style={styles.container}>
+      {isLoadingTweets ? (
+        <ActivityIndicator style={{ marginTop: 8 }} size="large" color="gray" />
+      ) : (
+        <FlatList
+          data={data}
+          renderItem={(props) => <RenderItem {...props} />}
+          keyExtractor={(item) => item.id.toString()}
+          ItemSeparatorComponent={() => <View style={styles.separator}></View>}
+          ListHeaderComponent={ProfileHeader}
+          refreshing={isRefreshing}
+          onRefresh={handleRefresh}
+          onEndReached={handleEnd}
+          onEndReachedThreshold={0}
+          ListFooterComponent={() =>
+            !isAtEndOfScrolling && (
+              <ActivityIndicator size="large" color="gray" />
+            )
+          }
+        />
+      )}
+    </View>
   );
 };
 
